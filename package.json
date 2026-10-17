@@ -1,0 +1,10 @@
+{
+  "name": "my-goals",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "sync": "node scripts/sync-meta.mjs",
+    "icons": "node scripts/make-icons.mjs"
+  }
+}
