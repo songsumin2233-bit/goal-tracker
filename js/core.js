@@ -209,11 +209,20 @@ export function summary(db, today) {
     activeCount: list.length,
     overdue: list.filter(x => x.e.status === 'overdue'),
     behind: list.filter(x => x.e.status === 'behind'),
-    dueTodayTasks: db.tasks.filter(t => !t.done && t.dueDate === today && activeIds.has(t.goalId)).length,
+    dueTodayTasks: db.tasks.filter(t => !t.done && t.dueDate === today && activeIds.has(t.goalId)).length, // 마감이 오늘인 것만
   };
 }
 
-// '오늘' 탭: 날짜 있는 미완료 할 일을 지난/오늘/이번 주(내일~6일 뒤)로, 오늘 완료한 할 일은 따로
+// 할 일 날짜 입력(시작·마감, 둘 다 선택) 검사. 하나만 있으면 그날 하루짜리, 같으면 시작일은 버린다.
+export function validateTaskDates(start, due) {
+  const s = isYMD(start) ? start : null;
+  const d = isYMD(due) ? due : null;
+  if (s && d && d < s) return { ok: false, error: '마감일이 시작일보다 빨라요' };
+  if (s && !d) return { ok: true, startDate: null, dueDate: s };
+  return { ok: true, startDate: s && s !== d ? s : null, dueDate: d };
+}
+
+// '오늘' 탭: 날짜 있는 미완료 할 일을 지난/오늘(진행 중 포함)/이번 주(내일~6일 뒤 시작)로, 오늘 완료한 할 일은 따로
 export function taskGroups(db, today) {
   const active = new Set(db.goals.filter(g => g.status === 'active').map(g => g.id));
   const groups = { past: [], today: [], week: [], doneToday: [] };
@@ -224,10 +233,10 @@ export function taskGroups(db, today) {
       continue;
     }
     if (!t.dueDate) continue;
-    const d = diffDays(today, t.dueDate);
-    if (d < 0) groups.past.push(t);
-    else if (d === 0) groups.today.push(t);
-    else if (d <= 6) groups.week.push(t);
+    const begin = diffDays(today, t.startDate || t.dueDate);
+    if (t.dueDate < today) groups.past.push(t);
+    else if (begin <= 0) groups.today.push(t);
+    else if (begin <= 6) groups.week.push(t);
   }
   const byDate = (a, b) => (a.dueDate || '').localeCompare(b.dueDate || '') || a.order - b.order;
   groups.past.sort(byDate);

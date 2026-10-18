@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   evaluate, expectedProgress, rawProgress, round1, compareEvaluated, formatProgress, formatGap,
-  dueLabel, validateGoalInput, validateLogValue, progressSeries, taskGroups, summary, extensionLabel,
+  dueLabel, validateGoalInput, validateLogValue, progressSeries, taskGroups, validateTaskDates, summary, extensionLabel,
   closedTimingLabel, valueSummary,
 } from '../js/core.js';
 import { diffDays, addDays, dayNumber, fromDayNumber, localTime, weekday } from '../js/date.js';
@@ -244,6 +244,32 @@ test('오늘 탭 묶음과 상단 배너 숫자', () => {
   assert.deepEqual(g.week.map(x => x.id), ['6일뒤']);
   assert.deepEqual(g.doneToday.map(x => x.id), ['오늘완료']);
   assert.equal(summary(data, TODAY).dueTodayTasks, 1);
+});
+
+test('기간이 있는 할 일: 진행 중이면 오늘, 곧 시작하면 이번 주', () => {
+  const a = goal({ id: 'a', measure: 'checklist' });
+  const t = (id, startDate, dueDate) => ({ id, goalId: 'a', title: id, startDate, dueDate, done: false, doneAt: null, order: 0 });
+  const g = taskGroups(db([a], {
+    tasks: [
+      t('진행중', '2026-11-10', '2026-11-30'),
+      t('오늘시작', TODAY, '2026-11-20'),
+      t('3일뒤시작', '2026-11-18', '2026-12-10'),
+      t('7일뒤시작', '2026-11-22', '2026-12-10'),
+      t('기간끝남', '2026-11-01', '2026-11-14'),
+    ],
+  }), TODAY);
+  assert.deepEqual(g.today.map(x => x.id).sort(), ['오늘시작', '진행중']);
+  assert.deepEqual(g.week.map(x => x.id), ['3일뒤시작']);
+  assert.deepEqual(g.past.map(x => x.id), ['기간끝남']);
+});
+
+test('할 일 날짜 입력 검사', () => {
+  assert.deepEqual(validateTaskDates('', ''), { ok: true, startDate: null, dueDate: null });
+  assert.deepEqual(validateTaskDates('', '2026-11-20'), { ok: true, startDate: null, dueDate: '2026-11-20' });
+  assert.deepEqual(validateTaskDates('2026-11-20', ''), { ok: true, startDate: null, dueDate: '2026-11-20' });
+  assert.deepEqual(validateTaskDates('2026-11-20', '2026-11-20'), { ok: true, startDate: null, dueDate: '2026-11-20' });
+  assert.deepEqual(validateTaskDates('2026-11-15', '2026-11-20'), { ok: true, startDate: '2026-11-15', dueDate: '2026-11-20' });
+  assert.equal(validateTaskDates('2026-11-20', '2026-11-15').ok, false);
 });
 
 test('지난 목표: 원래 마감일 대비 언제 끝났는지', () => {

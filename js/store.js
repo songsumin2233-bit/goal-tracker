@@ -110,6 +110,11 @@ export function validateDB(input) {
     const title = isStr(t.title) ? t.title.trim() : '';
     if (!title) err(`${at}.title: 비어 있어요.`);
     if (t.dueDate != null && !isYMD(t.dueDate)) err(`${at}.dueDate: 날짜가 아니에요.`);
+    if (t.startDate != null) {
+      if (!isYMD(t.startDate)) err(`${at}.startDate: 날짜가 아니에요.`);
+      else if (!isYMD(t.dueDate)) err(`${at}.startDate: 마감일 없이 시작일만 있어요.`);
+      else if (t.dueDate < t.startDate) err(`${at}.dueDate: 시작일보다 빨라요.`);
+    }
     if (t.doneAt != null && !isNum(t.doneAt)) err(`${at}.doneAt: 숫자(시각)가 아니에요.`);
     taskIds.add(t.id);
     const done = t.done === true;
@@ -117,6 +122,7 @@ export function validateDB(input) {
       id: t.id,
       goalId: t.goalId,
       title,
+      startDate: t.startDate ?? null,
       dueDate: t.dueDate ?? null,
       done,
       doneAt: done ? (t.doneAt ?? null) : null,
@@ -218,11 +224,12 @@ export function createSampleDB(today, now) {
     ['예산 요청서 제출', null, -2],
     ['킥오프 안건 공유', -1, null],
     ['회의실·화상 링크 준비', 0, null],
-    ['역할 분담표 확정', 2, null],
-    ['킥오프 발표 자료 리허설', 5, null],
+    ['역할 분담표 확정', 2, null, -1],
+    ['킥오프 발표 자료 리허설', 5, null, 3],
   ];
-  tasks.forEach(([title, due, doneDay], i) => db.tasks.push({
+  tasks.forEach(([title, due, doneDay, start], i) => db.tasks.push({
     id: `st${i + 1}`, goalId: 'sg3', title,
+    startDate: start == null ? null : d(start),
     dueDate: due == null ? null : d(due),
     done: doneDay != null,
     doneAt: doneDay != null ? localTime(d(doneDay), 18) : null,

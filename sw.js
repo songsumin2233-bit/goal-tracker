@@ -1,6 +1,6 @@
 // 앱 파일을 캐시해 오프라인에서도 열리게 한다.
 // VERSION은 js/config.js의 APP_VERSION과 같아야 한다 (`npm run sync`가 맞춰 넣는다).
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const CACHE = `goals-${VERSION}`;
 const ASSETS = [
   './',

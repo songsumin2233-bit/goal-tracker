@@ -116,6 +116,14 @@ function dateChip(d, t) {
   return `<span class="date-chip${n < 0 ? ' late' : n === 0 ? ' today' : ''}">${relDate(d, t)}</span>`;
 }
 
+// 기간이 있는 할 일: 시작 전이면 'M/D ~ M/D', 진행 중이면 '진행 중 · ~마감', 지나면 하루짜리와 같게
+function taskChip(task, t) {
+  if (!task.startDate || task.dueDate < t) return dateChip(task.dueDate, t);
+  const range = `${D.formatMD(task.startDate)} ~ ${D.formatMD(task.dueDate)}`;
+  if (task.startDate > t) return `<span class="date-chip">${range}</span>`;
+  return `<span class="date-chip today">진행 중 · ${relDate(task.dueDate, t)}까지</span>`;
+}
+
 const badge = status => `<span class="badge">${C.STATUS_LABEL[status]}</span>`;
 
 // ── 알림 영역 (모든 화면 공통) ──────────────────────────
@@ -358,13 +366,18 @@ function viewTasks(g, t, closed) {
   const done = tasks.filter(x => x.done).length;
   const rows = tasks.map(task => `<li>
       <label class="check"><input type="checkbox" data-toggle="task" data-id="${esc(task.id)}"${task.done ? ' checked' : ''}${closed ? ' disabled' : ''}>
-        <span><span class="t">${esc(task.title)}</span>${task.dueDate && !task.done ? dateChip(task.dueDate, t) : ''}</span></label>
+        <span><span class="t">${esc(task.title)}</span>${task.dueDate && !task.done ? taskChip(task, t) : ''}</span></label>
       ${closed ? '' : actionBtn('delete-task', task.id, '삭제', { cls: 'btn-ghost btn-danger', confirm: '한 번 더', aria: `${task.title} 삭제` })}
     </li>`).join('');
   const form = closed ? '' : `<form data-form="add-task" data-id="${esc(g.id)}" novalidate style="margin-top:12px">
       <div class="field"><label for="task-title">새 할 일</label><input class="input" id="task-title" name="title" maxlength="100" autocomplete="off" aria-describedby="task-title-err"><p class="field-error" id="task-title-err" data-err="title"></p></div>
-      <div class="row"><div class="grow field" style="margin:0"><label for="task-date">날짜 (선택)</label><input type="date" class="input" id="task-date" name="dueDate"></div>
-      <button class="btn btn-primary" style="align-self:flex-end">추가</button></div>
+      <div class="row">
+        <div class="grow field" style="margin:0"><label for="task-start">시작일 (선택)</label><input type="date" class="input" id="task-start" name="startDate"></div>
+        <div class="grow field" style="margin:0"><label for="task-date">마감일 (선택)</label><input type="date" class="input" id="task-date" name="dueDate" aria-describedby="task-date-err"></div>
+      </div>
+      <p class="field-error" id="task-date-err" data-err="dueDate"></p>
+      <p class="small muted" style="margin-top:4px">하루짜리면 한 칸만 채우세요.</p>
+      <div class="btn-row" style="margin-top:8px"><button class="btn btn-primary">추가</button></div>
     </form>`;
   return `<section class="panel" aria-labelledby="task-h"><div class="section-title"><h2 id="task-h">할 일</h2><span class="small muted">완료 ${done} / ${tasks.length}</span></div>
     ${tasks.length ? `<ul class="list">${rows}</ul>` : '<p class="empty-note">할 일을 추가하면 완료한 비율이 달성률이 돼요.</p>'}
@@ -433,7 +446,7 @@ function taskRow(task, t) {
   const g = findGoal(task.goalId);
   return `<li><div class="grow">
       <label class="check"><input type="checkbox" data-toggle="task" data-id="${esc(task.id)}"${task.done ? ' checked' : ''}><span><span class="t">${esc(task.title)}</span></span></label>
-      <div class="sub" style="padding-left:34px">${task.dueDate && !task.done ? `${dateChip(task.dueDate, t)} · ` : ''}<a href="${goalHref(g.id)}">${esc(g.title)}</a></div>
+      <div class="sub" style="padding-left:34px">${task.dueDate && !task.done ? `${taskChip(task, t)} · ` : ''}<a href="${goalHref(g.id)}">${esc(g.title)}</a></div>
     </div></li>`;
 }
 
@@ -821,7 +834,7 @@ const FORMS = {
       commit(() => {
         db.goals.push(ng);
         lines.forEach((title, i) => db.tasks.push({
-          id: S.uid('k'), goalId: ng.id, title: title.slice(0, 100), dueDate: null, done: false, doneAt: null, order: i,
+          id: S.uid('k'), goalId: ng.id, title: title.slice(0, 100), startDate: null, dueDate: null, done: false, doneAt: null, order: i,
         }));
       });
       toast('목표를 추가했어요');
@@ -868,13 +881,16 @@ const FORMS = {
   'add-task': form => {
     const g = findGoal(form.dataset.id);
     const title = form.elements.title.value.trim();
-    const due = form.elements.dueDate.value;
+    const dates = C.validateTaskDates(form.elements.startDate.value, form.elements.dueDate.value);
     clearErrors(form);
-    if (!title) return showErrors(form, { title: '할 일을 입력하세요' });
+    const errors = {};
+    if (!title) errors.title = '할 일을 입력하세요';
+    if (!dates.ok) errors.dueDate = dates.error;
+    if (Object.keys(errors).length) return showErrors(form, errors);
     const order = Math.max(-1, ...db.tasks.filter(x => x.goalId === g.id).map(x => x.order)) + 1;
     ui.focusAfter = '#task-title';
     commit(() => db.tasks.push({
-      id: S.uid('k'), goalId: g.id, title: title.slice(0, 100), dueDate: D.isYMD(due) ? due : null, done: false, doneAt: null, order,
+      id: S.uid('k'), goalId: g.id, title: title.slice(0, 100), startDate: dates.startDate, dueDate: dates.dueDate, done: false, doneAt: null, order,
     }));
   },
   'import-text': form => {
